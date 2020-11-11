@@ -24,7 +24,9 @@ The dataset we'll be using was manually put together based off data I pulled fro
 
 Some Result fields were left blank in the event of unusual circumstances such as California's Jungle Primaries (in which two democrats can advance to a runoff in the general), a strong third party (such Angus King from Maine winning as an Independent against both a Democrat and a Republican), or when a candidate runs unopposed (Jeff Sessions of Alabama ran unopposed in 2014 and won with almost 100% of the vote)
 
-Another feature worth noting is that this data does not cover special elections (such as Doug Jones' upset victory in Alabama in 2017) as special elections are, by their definition special. 
+Another feature worth noting is that this data does not cover special elections (such as Doug Jones' upset victory in Alabama in 2017) as special elections are, by their definition special.
+
+You can grab a copy of the data from my [GitHub](https://github.com/mrthoburn/senate_regression).
 
 
 ```{r include=FALSE}
