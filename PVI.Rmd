@@ -1,0 +1,140 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Predicting Senate Races with Linear Regression
+
+## Preface
+
+I was recently inspired by [this article](http://varianceexplained.org/r/start-blog/) by David Robinson to try my hand at some kind of blogging. It seemed a good time as any, as it would afford me an opportunity to practice some of the skills I've been learning as part of an online statistics class that I'm taking as well as my writing. So, welcome to the first installment in what will surely be a long and illustrious data-journalism career. I'm by no means a statistical expert and this is mostly about the learning process for me, so if you find something egregiously incorrect or you have general feedback don't hesitate to let me know in the comments. Furthermore, results were compiled by hand, so it is entirely possible that I've miscalculated or mistyped something. If you see something that doesn't look right let me know so I can correct my numbers accordingly.
+
+In the words of the great philosopher Jake the Dog: "Sucking at something is the first step to being sorta good at something", so without further ado, let's dive in and do some blogging.
+
+Note: This article was originally written before the 2020 elections although it was not published until after, partially due to juggling other responsibilities and partially because I'm a master procrastinator. 
+
+## Introduction
+
+The dataset we'll be using was manually put together based off data I pulled from Wikipedia. (You are free to draw your own conclusions about what it says about my social life that manually entering data into a spreadsheet is how I spend my free time, but in my defense this was done during a global pandemic.) It contains the State name, the [Cook Partisan Voting Index](https://en.wikipedia.org/wiki/Cook_Partisan_Voting_Index) for each state (using Wayback Machine to get PVI for previous cycles and expressed as a positive or negative value, with positive values representing democratic leaning states and negative values representing republican leaning states. This is a matter of semantics moreso than a value judgment of either party.), Year, Cycle (On being a presidential election year and Off being a midterm), Incumbency (1 being an a democratic incumbent, -1 indicating a republican incumbent, and 0 representing an open seat in which neither candidate is an incumbent), and results of US Senate races from 2012 to 2018 (expressed as a difference between the percent vote share of the democratic and republican candidates with positive values indicating a democratic win and negative values indicating a republican win).
+
+Some Result fields were left blank in the event of unusual circumstances such as California's Jungle Primaries (in which two democrats can advance to a runoff in the general), a strong third party (such Angus King from Maine winning as an Independent against both a Democrat and a Republican), or when a candidate runs unopposed (Jeff Sessions of Alabama ran unopposed in 2014 and won with almost 100% of the vote)
+
+Another feature worth noting is that this data does not cover special elections (such as Doug Jones' upset victory in Alabama in 2017) as special elections are, by their definition special. 
+
+
+```{r include=FALSE}
+library(GGally)
+```
+
+## Reading in the Data
+
+```{r}
+df <- read.table('voting_results.csv',header = TRUE,sep=",")
+df$Cycle <- as.factor(df$Cycle)
+df$Incumbency <- as.factor(df$Incumbency)
+df$Year <- as.factor(df$Year)
+head(df)
+cor(df[sapply(df, is.numeric)], use="complete.obs")
+```
+
+Reading the data and doing a quick correlation check we can see that there is a strong correlation between results and PVI, but let's have a look at our categorical variables before continuing with any regression analysis. 
+
+## Summarizing the Data
+
+```{r}
+ggplot(df, aes(x=Result)) + geom_histogram(color="black",fill="gray",binwidth=10)
+ggplot(df, aes(x=PVI)) + geom_histogram(color="black",fill="gray",binwidth=5)
+ggplot(df, aes(x=Cycle, y=Result)) + geom_boxplot(fill="gray")
+ggplot(df, aes(x=Incumbency, y=Result)) + geom_boxplot(fill="gray")
+ggplot(df, aes(x=Year, y=Result)) + geom_boxplot(fill="gray")
+
+```
+
+Examining the boxplots, it doesn't seem like there's much difference in results based on midterm/presidential cycles (at least for the data provided), which is to say that there doesn't appear to be a partisan advantage to running in an on or off cycle race. However unsurprisingly, it looks as if incumbency does have an affect on results. Incumbents tend to do better than non-incumbents (Although the exact extent to which incumbents have an advantage is best left to [actual pundits](https://fivethirtyeight.com/features/how-much-was-incumbency-worth-in-2018/)). Looking at results by year, we can see years in which the overall landscape seems to favor one party or another (Obama was reelected in 2012 and the Democratic party gained two seats in the senate that year, whereas in 2014 the they lost nine seats and their senate majority). The extent to which senate results correlate with presidential approval ratings or other broader partisan metrics is beyond the scope of this article although it would make for an interesting line of further inquiry. 
+
+## Plotting state results against PVI
+
+```{r}
+result.pvi <- lm('Result ~ PVI',df)
+summary(result.pvi)
+ggplot(df,aes(x=PVI ,y=Result))  + geom_point() + geom_smooth(method = "lm", fill = NA)
+```
+
+Plotting a simple linear regression, we do see a relatively well-fit linear model with mostly normally distributed residuals and $R^2$ value of .72. However, our standard error of 12.7 is much too noisy to make what I would consider to be any meaningful predictions about potential senate elections. I imagine my career as a political strategist would be extremely short lived if I told candidates that they could expect a 2 point victory, plus or minus 25 percent (assuming a 95% confidence interval). When close elections can come down to a few thousand votes and fractions of a percent, we would have to do much better to do any meaningful predictions.
+
+We do appear to have some non-linearity at the extremities, particularly in heavily republican states, although given the overall noise of the data I'm content to leave the model as is and keep it strictly linear.
+
+## Do On/Off Cycles affect the strength of PVI?
+
+### Motivation
+
+Suppose we wanted to look at whether or not On/Off years have any effect on PVI's effect on results. Perhaps partisan inclinations are weaker in midterms when there's not a presidential candidate to straight-ticket vote with, or perhaps the difference in turnout between midterms and presidential cycles favors one party or another. We can include the Cycle as an additional variable in our linear model and see how we fare.
+
+```{r}
+result.pvi.cycle <- lm('Result ~ PVI*Cycle',df)
+summary(result.pvi.cycle)
+ggplot(df,aes(x=PVI ,y=Result, col=Cycle))  + geom_point() + geom_smooth(method = "lm", fill = NA)
+```
+
+### Results
+
+Sadly, the results are underwhelming. We don't gain any noticeable advantage by including cycle as a predictor in our regression, and the p-values for the added predictors don't indicate statistical significance. Perhaps more data is needed across a longer time span, or perhaps there really isn't a difference. I would defer to the experts on this one. 
+
+But what happens if we try our other variables?
+
+## How does the strength of PVI change by year?
+
+### Motivation
+
+Perhaps we can refine our predictions if we account for the year of the election. It wouldn't be particularly useful for making future predictions by itself (What kinds of predictions would we make about 2020? Your guess is as good as mine), but it might indicate some kind of national mood favoring one party or another that could potentially be researched and quantified by other metrics.
+
+```{r}
+result.pvi.year <- lm('Result ~ PVI*Year',df)
+summary(result.pvi.year)
+ggplot(df,aes(x=PVI ,y=Result, col=Year))  + geom_point() + geom_smooth(method = "lm", fill = NA)
+```
+
+### Results
+
+Swapping Cycle for Year in our model, we do see improvements to our Adjusted $R^2$ value as well as a slight reduction in our Residual Standard Error. The p-values for the year terms for the most part look to be significant (although there's no statistically significance between 2012 (the baseline based on how the lm was set up) and 2018). However, the data is still to noisy to make any meaningful predictions. 
+
+It does however hint at the possibility of some kind of national mood that could potentially be researched and quantified with something like presidential approval ratings or generic partisan approval rating. It's always fun to set out to answer one question and only end up with more questions.
+
+## How does the strength of PVI change by incumbency?
+
+### Motivation
+
+Maybe we can do better if we factor in incumbency. It's possible that being a seated incumbent gives advantages whereas trying to unseat an existing incumbent is an uphill battle. 
+
+```{r}
+result.pvi.incumbency <- lm('Result ~ PVI*Incumbency',df)
+summary(result.pvi.incumbency)
+ggplot(df,aes(x=PVI,y=Result, col=Incumbency))  + geom_point() + geom_smooth(method = "lm", fill = NA)
+```
+
+### Results
+
+Modeling against PVI and Incumbency, we get our best results yet with an Adjusted $R^2$ of .81 and an RSE of 10.38. It does in fact seem to indicate that being an incumbent is associated with better results for your party (based on this data at least). We see that democratic incumbents tend to receive a higher share of the vote than non-incumbents for a given PVI, and we see that democratic non-incuments running against republican senators recieve a lower share of the vote for a given PVI. However, as before we still have too much unexplained variability to make any meaningful predictions.
+
+## Conclusion
+
+The initial motivation for this line of inquiry was to try to see how much variability in election results can be described with publicly available data rather than something like polling that costs time and money to gather data on. These efforts to understand voting trends in a rigorous quantitative sense could be beneficial for party strategists to understand the effect of historical voting trends on future ones in order allocate their efforts into races where they have the best chance of winning, particularly if money was tight or reliable polling data wasn't readily available in a given state. If you were the DCCC or the RSCC and you only had a finite amount of money, time, and personnel, how much should you invest defending ostensibly safe seats? How much should you invest trying to strike deep into the heart of enemy territory unseating an incumbent in a traditionally safe state? How much should you invest in swing states? 
+
+For the time being it looks like I'll have to put any ambitions I may have of being a political strategist or forecaster on hold and keep my day job. It doesn't seem like one can make any particularly accurate predictions about voting results, at least in terms of trying to pinpoint a specific numeric value based on these metrics alone.  At the end of the day, not every exploration will end in a satisfying conclusion, and that's just part of the process. I'm certainly not going to go through all the time to compile and analyze the data just to shelve it when it doesn't make for a compelling conclusion. I'm going to try to score some internet points off it, prediction accuracy be damned. 
+
+If anything, we should take some comfort in knowing that PVI alone isn't a silver bullet for predicting senate elections. If it were, it would imply that elections are set in stone and predetermined; it wouldn't matter who was running or what kind of strategy they employed. Red states would be red states, and blue states would be blue states. In that regard we can breathe a sigh of relief knowing that voters aren't completely mindless automatons who vote strictly along party lines (for better or for worse).
+
+## Future ideas
+
+If I were to expand on this work in the future, I would be interested in exploring additional data that could potentially be informative in making these kinds of predictions such as fundraising data, social media engagement, or Google search trends. Google search trends in particular seem like an especially interesting line of inquiry to me. How much of non-presidential races comes down to name recognition? In the era of the fast moving 24-hour news cycle, is it advantageous to get your name into the ether by any means necessary, or can low profile, slow and steady campaigns win the race? (pun intended) The answers to these questions could lie in Google's searh traffic data and could have relevance for campaign strategy and election forecasting. However, the effort to aggregate this data for the hundred or so races I already have is non-trival, seeing as Google Trends doesn't have an API to query this kind of data programatically and I don't feel particularly inclined to spend more time entering data into a spreadhseet at the moment. (If any Google engineers are reading this, please publicly expose a Trends API. It would make me very happy)
+
+Another additional line of question would be to take the existing data and the problem more probabalistically (i.e. given a set of initial conditions what is the probability that a candidate will win the election?), perhaps that would be more fruitful than trying to pin down precise values.
+
+## Postface
+
+If you've made it this far, congratulations and thank you for bearing with me. What did you think? Did you love it? Did you hate it? Do you want to hire me to run your next campaign for office? Let me know in the comments so I can learn and grow. 
